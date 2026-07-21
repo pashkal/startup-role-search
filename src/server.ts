@@ -2,8 +2,8 @@ import express from "express";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.ts";
 import { requireApiSecret } from "./auth.ts";
-import { ValidationError } from "./normalize.ts";
-import { addStartup, initStorage } from "./startups.ts";
+import { splitDomains } from "./normalize.ts";
+import { addStartups, initStorage } from "./startups.ts";
 
 /** Google's errors arrive as huge objects; surface only the actionable part. */
 function explainSheetsError(err: unknown): string {
@@ -30,16 +30,25 @@ app.use(express.json());
 app.use(express.static(fileURLToPath(new URL("../public", import.meta.url))));
 app.use(requireApiSecret);
 
+// Accepts one domain or many: `domain`/`domains`, as a string (newline-, comma-
+// or space-separated) or an array. Always answers with a per-domain result list.
 app.post("/startups", async (req, res) => {
+  const domains = splitDomains(req.body?.domains ?? req.body?.domain);
+  if (domains.length === 0) {
+    res.status(400).json({ error: "At least one domain is required." });
+    return;
+  }
+
   try {
-    const result = await addStartup(String(req.body?.domain ?? ""));
-    res.status(result.status === "created" ? 201 : 200).json(result);
+    const results = await addStartups(domains);
+    const summary = {
+      created: results.filter((r) => r.status === "created").length,
+      exists: results.filter((r) => r.status === "exists").length,
+      invalid: results.filter((r) => r.status === "invalid").length,
+    };
+    res.status(summary.created > 0 ? 201 : 200).json({ results, summary });
   } catch (err) {
-    if (err instanceof ValidationError) {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    console.error("Failed to add startup:", err);
+    console.error("Failed to add startups:", err);
     res.status(500).json({ error: "Could not write to the spreadsheet." });
   }
 });
