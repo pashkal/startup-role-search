@@ -22,3 +22,15 @@ export function normalizeDomain(raw: string): string {
   }
   return value;
 }
+
+/**
+ * Same as normalizeDomain but returns null instead of throwing. For values read
+ * back from the sheet, which may have been typed in by hand as full URLs.
+ */
+export function safeNormalizeDomain(raw: string): string | null {
+  try {
+    return normalizeDomain(raw);
+  } catch {
+    return null;
+  }
+}

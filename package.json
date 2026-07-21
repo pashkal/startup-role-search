@@ -10,7 +10,8 @@
     "start": "node src/server.ts",
     "dev": "node --watch src/server.ts",
     "typecheck": "tsc --noEmit",
-    "init-storage": "node src/init-storage.ts"
+    "init-storage": "node src/init-storage.ts",
+    "detect-ats": "node src/detect-ats.ts"
   },
   "dependencies": {
     "express": "^5.1.0",
