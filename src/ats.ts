@@ -140,20 +140,39 @@ async function identityConfirmed(link: BoardLink, domain: string): Promise<boole
  * on two boards (vercel) proves the guess carries no information — and only
  * after the board is confirmed to belong to this company.
  */
+/**
+ * Slug candidates for a domain, most literal first. Companies often drop a
+ * descriptive prefix or suffix on their board: altahq.com -> "alta",
+ * solsticehealth.co -> "solstice".
+ */
+function slugCandidates(domain: string): string[] {
+  const label = domain.split(".")[0] ?? "";
+  const found = new Set<string>([label]);
+
+  const prefix = label.match(/^(?:get|join|use|with|try|hello|go|my)(.+)$/);
+  if (prefix?.[1]) found.add(prefix[1]);
+
+  const suffix = label.match(/^(.+?)(?:hq|app|labs|health|inc|group)$/);
+  if (suffix?.[1]) found.add(suffix[1]);
+
+  found.add(label.replace(/-/g, ""));
+  return [...found].filter((s) => s.length > 2);
+}
+
 async function probeBySlug(domain: string): Promise<BoardLink | null> {
-  const slug = domain.split(".")[0];
-  if (!slug) return null;
+  for (const slug of slugCandidates(domain)) {
+    const results = await Promise.all(
+      (Object.keys(verifyUrl) as AtsName[]).map(async (ats) =>
+        (await verify({ ats, slug })) ? ({ ats, slug } satisfies BoardLink) : null,
+      ),
+    );
+    const matches = results.filter((m): m is BoardLink => m !== null);
+    if (matches.length !== 1) continue;
 
-  const results = await Promise.all(
-    (Object.keys(verifyUrl) as AtsName[]).map(async (ats) =>
-      (await verify({ ats, slug })) ? ({ ats, slug } satisfies BoardLink) : null,
-    ),
-  );
-  const matches = results.filter((m): m is BoardLink => m !== null);
-  if (matches.length !== 1) return null;
-
-  const [only] = matches;
-  return only && (await identityConfirmed(only, domain)) ? only : null;
+    const [only] = matches;
+    if (only && (await identityConfirmed(only, domain))) return only;
+  }
+  return null;
 }
 
 /** A board is only accepted once its own API confirms the slug resolves. */
