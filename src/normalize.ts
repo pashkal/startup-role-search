@@ -24,6 +24,20 @@ export function normalizeDomain(raw: string): string {
 }
 
 /**
+ * Splits whatever the form or an API client sends into candidate domains:
+ * a single string (pasted list, separated by newlines, commas or spaces) or an
+ * array of them. Entries are only split apart here — validity is decided later,
+ * per entry, so one bad domain doesn't sink the whole batch.
+ */
+export function splitDomains(input: unknown): string[] {
+  const parts = Array.isArray(input) ? input : [input];
+  return parts
+    .flatMap((part) => String(part ?? "").split(/[\s,;]+/))
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+}
+
+/**
  * Same as normalizeDomain but returns null instead of throwing. For values read
  * back from the sheet, which may have been typed in by hand as full URLs.
  */

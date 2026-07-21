@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Add a startup</title>
+    <title>Add startups</title>
     <style>
       :root { color-scheme: light dark; }
       body {
@@ -15,8 +15,10 @@
       .hidden { display: none; }
       .head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
       h1 { font-size: 1.5rem; margin: 0; }
-      form { display: flex; gap: 0.5rem; margin: 1.5rem 0; }
-      input { flex: 1; padding: 0.6rem; font: inherit; }
+      form { display: flex; flex-direction: column; gap: 0.5rem; margin: 1.5rem 0; }
+      input, textarea { padding: 0.6rem; font: inherit; box-sizing: border-box; width: 100%; }
+      textarea { resize: vertical; min-height: 6rem; }
+      .hint { font-size: 0.875rem; opacity: 0.7; margin: 0; }
       button { padding: 0.6rem 1rem; font: inherit; cursor: pointer; }
       button[disabled] { opacity: 0.5; cursor: default; }
       .link {
@@ -32,7 +34,7 @@
       .card input { width: 100%; box-sizing: border-box; }
       .actions { display: flex; gap: 0.5rem; margin-top: 1rem; }
       .actions button { flex: 1; }
-      #result { padding: 0.75rem; border-left: 3px solid; }
+      #result { padding: 0.75rem; border-left: 3px solid; white-space: pre-line; }
       #result:empty { display: none; }
       .ok { border-color: seagreen; }
       .info { border-color: steelblue; }
@@ -42,11 +44,12 @@
   <body>
     <main id="main-view">
       <div class="head">
-        <h1>Add a startup</h1>
+        <h1>Add startups</h1>
         <button type="button" class="link" id="open-settings">Settings</button>
       </div>
       <form id="form">
-        <input id="domain" placeholder="acme.com" autocomplete="off" autofocus required />
+        <textarea id="domains" placeholder="acme.com&#10;https://example.io/careers&#10;another.co" autocomplete="off" autofocus required></textarea>
+        <p class="hint">One per line, or separated by commas or spaces.</p>
         <button type="submit">Add</button>
       </form>
       <p id="result"></p>
@@ -73,7 +76,7 @@
       const mainView = $("main-view");
       const settingsView = $("settings-view");
       const form = $("form");
-      const domain = $("domain");
+      const domains = $("domains");
       const secret = $("secret");
       const result = $("result");
       const submit = form.querySelector("button");
@@ -93,7 +96,23 @@
       const closeSettings = () => {
         settingsView.classList.add("hidden");
         mainView.classList.remove("hidden");
-        domain.focus();
+        domains.focus();
+      };
+
+      /** Turns the per-domain results into a short report: counts, then the details. */
+      const describe = ({ results, summary }) => {
+        const lines = [];
+        if (summary.created) lines.push(`Added ${summary.created}.`);
+        if (summary.exists) lines.push(`Skipped ${summary.exists} already in the list.`);
+        if (summary.invalid) lines.push(`Rejected ${summary.invalid}.`);
+
+        for (const r of results) {
+          if (r.status === "exists") lines.push(`• ${r.domain} — already in the list`);
+          if (r.status === "invalid") lines.push(`• ${r.error}`);
+        }
+
+        const cls = summary.invalid ? "error" : summary.created ? "ok" : "info";
+        return [cls, lines.join("\n")];
       };
 
       $("open-settings").addEventListener("click", openSettings);
@@ -117,18 +136,20 @@
           const res = await apiFetch("/startups", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain: domain.value }),
+            body: JSON.stringify({ domains: domains.value }),
           });
           const data = await res.json();
           if (res.status === 401) {
             show("error", "Invalid API secret — check it in Settings.");
           } else if (!res.ok) {
             show("error", data.error ?? "Something went wrong.");
-          } else if (data.status === "exists") {
-            show("info", `${data.domain} is already in the list — skipped.`);
           } else {
-            show("ok", `Added ${data.startup.domain}.`);
-            domain.value = "";
+            show(...describe(data));
+            // Leave the rejected ones in the box so they can be fixed and resubmitted.
+            domains.value = data.results
+              .filter((r) => r.status === "invalid")
+              .map((r) => r.input)
+              .join("\n");
           }
         } catch {
           show("error", "Could not reach the server.");
