@@ -87,6 +87,24 @@ const boardPageUrl: Record<AtsName, (slug: string) => string> = {
 
 const simplify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+/** Legal-form words that are dropped only when they stand as their own token. */
+const CORP_TOKENS = new Set([
+  "inc", "llc", "ltd", "limited", "corp", "corporation", "co", "company",
+  "gmbh", "bv", "ag", "plc", "sa", "holdings", "group",
+]);
+
+/**
+ * "Gusto, Inc." -> "gusto". Tokenizing first matters: stripping a trailing
+ * "co" from the raw string would turn "cisco" into "cis".
+ */
+function canonicalName(raw: string): string {
+  return raw
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token && !CORP_TOKENS.has(token))
+    .join("");
+}
+
 /**
  * Guards against slug collisions: a board only counts as this company's if it
  * names the company (Greenhouse returns company_name) or its public page
@@ -101,10 +119,11 @@ async function identityConfirmed(link: BoardLink, domain: string): Promise<boole
       });
       if (res.ok) {
         const body = (await res.json()) as { jobs?: { company_name?: string }[] };
-        const name = simplify(body.jobs?.[0]?.company_name ?? "");
+        const name = canonicalName(body.jobs?.[0]?.company_name ?? "");
         const label = simplify(domain.split(".")[0] ?? "");
-        // "Gusto, Inc." vs "gusto" — either may contain the other.
-        if (name && label && (name.includes(label) || label.includes(name))) return true;
+        // Exact match only. Substring matching accepted superset.sh against
+        // "super{set} Hive Community", an unrelated company.
+        if (name && label && name === label) return true;
       }
     } catch {
       // fall through to the page check
