@@ -17,6 +17,9 @@ Two flows for starters:
 1) Ingest the list of startup names and websites, normalize the data, identify which of the three supported job boards the startup is using (flag the rest)
 2) Add a saved search, pull each company's openings from its ATS, have the LLM judge fit, save links to fitting openings
 
+Working agreements:
+- No feature branches. Commit straight to `main` and push directly — don't create branches or pull requests for changes here.
+
 Design notes:
 - Re-runs must be idempotent: match openings to existing rows so a refresh updates the list without losing status tracking on already-seen openings.
 - Cache LLM fit verdicts keyed by (opening, search) so repeat runs stay cheap and only new/changed openings hit the model.
